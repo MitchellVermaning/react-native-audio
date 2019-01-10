@@ -56,6 +56,7 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
   private MediaRecorder recorder;
   private String currentOutputFile;
   private boolean isRecording = false;
+  private boolean meteringEnabled = false;
   private boolean isPaused = false;
   private boolean includeBase64 = false;
   private Timer timer;
@@ -128,6 +129,7 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
       recorder.setAudioChannels(recordingSettings.getInt("Channels"));
       recorder.setAudioEncodingBitRate(recordingSettings.getInt("AudioEncodingBitRate"));
       recorder.setOutputFile(destFile.getPath());
+      meteringEnabled = recordingSettings.getBoolean("MeteringEnabled");
       includeBase64 = recordingSettings.getBoolean("IncludeBase64");
     }
     catch(final Exception e) {
@@ -315,10 +317,19 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
         if (!isPaused) {
           WritableMap body = Arguments.createMap();
           body.putDouble("currentTime", stopWatch.getTimeSeconds());
+          if (meteringEnabled) {
+            int amplitude = recorder.getMaxAmplitude();
+            if (amplitude == 0) {
+              body.putInt("currentMetering", -160); // The first call - absolutely silence
+            } else {
+              // db = 20 * log10(peaks/ 32767); where 32767 - max value of amplitude in Android, peaks - current value
+              body.putInt("currentMetering", (int) (20 * Math.log(((double) amplitude) / 32767d)));
+            }
+          }
           sendEvent("recordingProgress", body);
         }
       }
-    }, 0, 1000);
+    }, 0, 250);
   }
 
   private void stopTimer(){
